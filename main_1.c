@@ -16,6 +16,7 @@
 #ifndef CSBOT_REAL
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #define DLL_EXPORT extern __declspec(dllexport)
 #define false 0
@@ -55,9 +56,24 @@ int AI_SensorNum = 13;
 
 #define CsBot_AI_C//DO NOT delete this line
 
+//#DEFINES of COLORS
+#define COLOR_YELLOW 0;
+#define COLOR_RED 1;
+#define COLOR_CYAN 2;
+#define COLOR_BLACK 3;
+#define COLOR_SUPER_OBJ 4;
+#define COLOR_DEPOSIT 5;
+#define COLOR_BLUE_FLOOR 6;
+#define COLOR_SWAMPLAND 7;
+#define COLOR_IN_TRAP 8;
+#define COLOR_TYPE 9;
+//#DEFINES of Dijkstra
+#define MAX_DOT_NUMBER 36*27;
+
 enum Action_W1//CurActions for WORLD_1
 {
   DEFINE = 0,
+  FIND_OBJ,
   GO
 };
 enum Action_W1 action_w1;
@@ -69,9 +85,33 @@ enum Action_W2//CurActions for WORLD_2
 };
 
 enum Action_W2 action_w2;
+// Global_Variable
+ //Colors
+int red_obj[3][2] = {{230, 260}, {25, 40}, {25, 40}};
+int cyan_obj[3][2] = {{25, 40}, {245, 255}, {250, 255}};
+int black_obj[3][2] = {{25, 40}, {25, 40}, {25, 40}};
+int trap_line[3][2] = {{200, 240}, {217, 248}, {0, 5}};
+int blue_zone[3][2] = {{0, 0}, {150, 171}, {255, 255}};
+int object_box[3][2] = {{230, 240}, {140, 150}, {0, 5}};
+int gray_zone[3][2] = {{130, 155}, {140, 165}, {185, 210}};
+int sp_obj[3][2] = {{230, 255}, {15, 45}, {250, 255}};
+int purple_line[3][2] = {{150, 180}, {80, 100}, {180, 220}};
+int in_trap[3][2] = {{50,70},{95,115},{220,250}};
+int Yellow[3][2] = {{195, 245}, {215, 250}, {0, 5}};
+int trap[3][2] = {{50,70},{95,120},{22,250}};
 
+int UsingColors[COLOR_TYPE][6];
+ // others
+int loaded_objects[4];//[0]==red [1]==cyan [2]==break [3]==super_object
 // GLOBAL_FUNCTION
+ //  Declaration Funtions//
+int ColorInformationInputer(void);
+int IsOnStuff(void);
+int IsOnRedObj(void);
+int IsOnCyanObj(void);
+int IsOnBlackObj(void);
 void Motor(int left,int right);
+
 void Motor(int left,int right)
 {
   action_w1 = DEFINE;
@@ -81,10 +121,55 @@ void Motor(int left,int right)
   LED_1 = 0;
   MyState = 0;
 }
+ // other functions
+
+int ColorInformationInputer(int num , int col[3][2]){
+  for (int i=0; i < 3; i++) {
+    for (int j=0;j<2;j++){
+      UsingColors[num][3*i+j]=col[i][j];
+    }
+  }
+}
+int IsOnStuff(int num){
+  int r = 0;
+  int color_width = 10;
+  if(num==COLOR_SUPER_OBJ){
+    color_width = 20;
+  }
+  if(Colors[num][0]-color_width <= CSLeft_R && CSLeft_R <= Colors[num][1]+color_width
+  && Colors[num][2]-color_width <= CSLeft_G && CSLeft_G <= Colors[num][3]+color_width
+  && Colors[num][4]-color_width <= CSLeft_B && CSLeft_B <= Colors[num][5]+color_width){
+    r++;
+  }
+  if(Colors[num][0]-color_width <= CSRight_R && CSRight_R <= Colors[num][1]+color_width
+  && Colors[num][2]-color_width <= CSRight_G && CSRight_G <= Colors[num][3]+color_width
+  && Colors[num][4]-color_width <= CSRight_B && CSRight_B <= Colors[num][5]+color_width){
+    r+=2;
+  }
+  return r;
+}
+int IsOnRedObj(){
+  return IsOnStuff(COLOR_RED);
+}
+int IsOnCyanObj(){
+  return IsOnStuff(COLOR_CYAN);
+}
+int IsOnBlackObj(){
+  return IsOnStuff(COLOR_BLACK);
+}
 //functions for world_1
 
-//functions for WORLD_2
-
+//WORLD_2
+ //Variables
+struct Dot{
+  int id;//dot_id
+  int cost;//そのdotに行くまでのcost
+  int from;//直前のdot
+  int done;//そのdotを調べたかどうか
+  int edge_to[MAX_DOT_NUMBER];//そのdotから行くことの出来るdotのid
+  int edge_cost[MAX_DOT_NUMBER];//edge_toに行くための道のコスト
+  int edge_num;//そのdotから行くことの出来るdotの数
+}
 DLL_EXPORT void SetGameID(int GameID)
 {
     CurGame = GameID;
@@ -184,6 +269,24 @@ void Game0()
     {
         Duration--;
     }
+    else if(IsOnRedObj()&&LoadedObjects<6&&loaded_objects[0]<2){
+      loaded_objects[0]++;
+      printf("\nFind Red Object");
+      Duration = 49;
+      action_w1 =FIND_OBJ;
+    }
+    else if(IsOnCyanObj()&&LoadedObjects<6&&loaded_objects[1]<2){
+      loaded_objects[1]++;
+      printf("\nFind Cyan Object");
+      Duration = 49;
+      action_w1 =FIND_OBJ;
+    }
+    else if(IsOnBlackObj()&&LoadedObjects<6&&loaded_objects[2]<2){
+      loaded_objects[2]++;
+      printf("\nFind Black Object");
+      Duration = 49;
+      action_w1 = FIND_OBJ;
+    }
     else if(true)
     {
         Duration = 0;
@@ -191,8 +294,32 @@ void Game0()
     }
     switch(action_w1)
     {
+        case FIND_OBJ:
+            WheelLeft = 0;
+            WheelRight = 0;
+            LED_1 = 1;
+            MyState = 0;
+            if(Duration==1){
+              LoadedObjects++;
+            }
+            if(Duration<6){
+              WheelLeft = 1;
+              WheelRight = 1;
+              LED_1 = 0;
+              MyState = 0;
+            }
+            break;
         case GO:
-            Motor(3,3);
+            if(US_Left>25){
+              Motor(2,3);
+            }else if(US_Left<15){
+              Motor(3,2);
+            }else{
+              Motor(3,3);
+            }
+            if(US_Front<20){
+              Motor(3,0);
+            }
             break;
         default:
             break;
